@@ -530,14 +530,34 @@ function getPlaceholderImage(category: Category): string {
   return placeholders[category];
 }
 
-// Get article by ID
-export function getArticleById(id: string): Article | undefined {
-  // Note: In production without caching, this will only work during the current request
-  // Articles are generated fresh on each request
-  return undefined;
+// In-memory cache that persists across requests
+let articlesCache: Article[] = [];
+let lastScrapeTime: number = 0;
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours (won't auto-expire, only on manual trigger)
+
+// Get cached articles
+export function getCachedArticles(): Article[] {
+  return articlesCache;
 }
 
-// Scrape articles - NO CACHING - Fresh on every request
+// Get article by ID from cache
+export function getArticleById(id: string): Article | undefined {
+  return articlesCache.find(a => a.id === id);
+}
+
+// Check if cache has articles
+export function hasCachedArticles(): boolean {
+  return articlesCache.length > 0;
+}
+
+// Clear the cache
+export function clearCache(): void {
+  articlesCache = [];
+  lastScrapeTime = 0;
+  console.log(`[${new Date().toISOString()}] Cache cleared`);
+}
+
+// Scrape articles and update cache
 export async function scrapeArticles(category?: Category, articlesPerSource: number = 20): Promise<Article[]> {
   const categoriesToScrape: Category[] = category 
     ? [category] 
@@ -559,10 +579,14 @@ export async function scrapeArticles(category?: Category, articlesPerSource: num
     });
   }
 
-  // Shuffle and return fresh articles
+  // Shuffle articles
   const shuffled = allArticles.sort(() => Math.random() - 0.5);
   
-  console.log(`[${new Date().toISOString()}] Fresh scrape completed: ${shuffled.length} articles`);
+  // Update cache and timestamp
+  articlesCache = shuffled;
+  lastScrapeTime = Date.now();
+  
+  console.log(`[${new Date().toISOString()}] Scrape completed: ${shuffled.length} articles. Cache updated.`);
   
   return shuffled;
 }

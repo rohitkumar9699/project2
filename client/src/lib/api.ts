@@ -2,23 +2,16 @@ import { Article, Category } from "./mockData";
 
 const API_BASE = "/api";
 
-// Fetch articles with no caching - FRESH scrape on every request
+// Fetch articles from cache (no scraping on page load)
 export async function fetchArticlesFromAPI(category?: Category): Promise<Article[]> {
   try {
     const url = category 
       ? `${API_BASE}/scrape/${encodeURIComponent(category)}`
       : `${API_BASE}/scrape-all`;
     
-    console.log(`[Client] Fetching fresh articles from: ${url}`);
+    console.log(`[Client] Fetching articles from cache: ${url}`);
     
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
-    });
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch articles: ${response.statusText}`);
@@ -29,7 +22,7 @@ export async function fetchArticlesFromAPI(category?: Category): Promise<Article
     // Handle both old format (array) and new format (object with articles property)
     const articles = Array.isArray(data) ? data : data.articles || [];
     
-    console.log(`[Client] Received ${articles.length} articles`);
+    console.log(`[Client] Received ${articles.length} articles from cache`);
     
     return articles;
   } catch (error) {
@@ -44,11 +37,7 @@ export async function fetchArticlesFromLegacyAPI(category?: Category): Promise<A
     ? `${API_BASE}/articles?category=${encodeURIComponent(category)}`
     : `${API_BASE}/articles`;
   
-  const response = await fetch(url, {
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate'
-    }
-  });
+  const response = await fetch(url);
   
   if (!response.ok) {
     throw new Error(`Failed to fetch articles: ${response.statusText}`);
@@ -67,11 +56,12 @@ export async function fetchArticleByIdFromAPI(id: string): Promise<Article> {
   return response.json();
 }
 
-export async function triggerScrape(): Promise<{ success: boolean; count: number; articles: Article[] }> {
-  const response = await fetch(`${API_BASE}/scrape-all`, {
-    method: 'GET',
+// Manual trigger scraping - ONLY way to refresh content
+export async function triggerManualScrape(): Promise<{ success: boolean; count: number; articles: Article[] }> {
+  const response = await fetch(`${API_BASE}/trigger-scrape`, {
+    method: 'POST',
     headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate'
+      'Content-Type': 'application/json'
     }
   });
   
