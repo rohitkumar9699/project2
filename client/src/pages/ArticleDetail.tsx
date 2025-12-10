@@ -1,41 +1,49 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, Link } from "wouter";
 import { Header } from "@/components/Header";
-import { fetchArticleById } from "@/lib/mockData";
-import { Loader2, ArrowLeft, Clock, ExternalLink, Calendar, User } from "lucide-react";
+import { fetchArticleByIdFromAPI } from "@/lib/api";
+import { Loader2, ArrowLeft, Clock, ExternalLink, Calendar, User, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatDistanceToNow, format } from "date-fns";
 
 export default function ArticleDetail() {
   const [match, params] = useRoute("/article/:id");
   const id = params?.id;
 
-  const { data: article, isLoading } = useQuery({
+  const { data: article, isLoading, error } = useQuery({
     queryKey: ["article", id],
-    queryFn: () => fetchArticleById(id || ""),
+    queryFn: () => fetchArticleByIdFromAPI(id || ""),
     enabled: !!id,
+    retry: 2,
   });
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Header />
-        <div className="flex-grow flex justify-center items-center">
+        <div className="flex-grow flex flex-col justify-center items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground text-sm">Loading article...</p>
         </div>
       </div>
     );
   }
 
-  if (!article) {
+  if (error || !article) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Header />
-        <div className="flex-grow flex flex-col justify-center items-center p-4 text-center">
-          <h2 className="text-2xl font-bold mb-4">Article Not Found</h2>
-          <p className="text-muted-foreground mb-6">The article you are looking for does not exist or has been removed.</p>
+        <div className="flex-grow flex flex-col justify-center items-center p-4">
+          <Alert variant="destructive" className="max-w-md mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Article Not Found</AlertTitle>
+            <AlertDescription>
+              The article you are looking for does not exist or has been removed.
+            </AlertDescription>
+          </Alert>
           <Link href="/">
             <Button>Return to Home</Button>
           </Link>

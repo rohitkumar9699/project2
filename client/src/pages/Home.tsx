@@ -3,17 +3,21 @@ import { useRoute } from "wouter";
 import { Header } from "@/components/Header";
 import { CategoryNav } from "@/components/CategoryNav";
 import { NewsCard } from "@/components/NewsCard";
-import { fetchArticles, Category } from "@/lib/mockData";
-import { Loader2 } from "lucide-react";
+import { Category } from "@/lib/mockData";
+import { fetchArticlesFromAPI } from "@/lib/api";
+import { Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function Home() {
   const [match, params] = useRoute("/category/:category");
   const category = match ? (params?.category as Category) : undefined;
 
-  const { data: articles, isLoading } = useQuery({
+  const { data: articles, isLoading, error } = useQuery({
     queryKey: ["articles", category],
-    queryFn: () => fetchArticles(category),
+    queryFn: () => fetchArticlesFromAPI(category),
+    staleTime: 60000, // Cache for 1 minute
+    retry: 2,
   });
 
   return (
@@ -30,17 +34,30 @@ export default function Home() {
             <p className="text-muted-foreground">
               {category 
                 ? `The latest updates and breaking news in ${category}.`
-                : "Curated headlines from around the globe."}
+                : "Curated headlines from around the globe, scraped fresh from news sources."}
             </p>
           </div>
 
           {isLoading ? (
-            <div className="flex justify-center items-center h-64">
+            <div className="flex flex-col justify-center items-center h-64 gap-4">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-muted-foreground text-sm">Scraping latest news articles...</p>
+            </div>
+          ) : error ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                Failed to fetch articles. Please try again later.
+              </AlertDescription>
+            </Alert>
+          ) : !articles || articles.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">No articles found.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {articles?.map((article, index) => (
+              {articles.map((article, index) => (
                 <motion.div
                   key={article.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -58,7 +75,7 @@ export default function Home() {
       <footer className="border-t py-8 bg-muted/30">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           <p>© 2025 The Daily Pulse. All rights reserved.</p>
-          <p className="mt-2 text-xs">This is a mock application for demonstration purposes.</p>
+          <p className="mt-2 text-xs">Live news scraped from BBC, Reuters, TechCrunch, and other trusted sources.</p>
         </div>
       </footer>
     </div>
