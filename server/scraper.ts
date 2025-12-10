@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import crypto from 'crypto';
 
 export type Category = "International" | "Sports" | "Technology" | "Health" | "Science";
 
@@ -472,7 +473,7 @@ function generateDetailedContent(title: string, summary: string, category: Categ
   `;
 }
 
-async function scrapeSource(source: NewsSource, category: Category): Promise<Article[]> {
+async function scrapeSource(source: NewsSource, category: Category, globalSeen: Set<string>): Promise<Article[]> {
   try {
     const response = await axios.get(source.url, {
       headers: {
@@ -483,27 +484,54 @@ async function scrapeSource(source: NewsSource, category: Category): Promise<Art
 
     const parsedArticles = await source.parse(response.data, source.url);
     const articles: Article[] = [];
-    const seenUrls = new Set<string>();
 
     for (const article of parsedArticles) {
       if (articles.length >= 20) break;
-      if (seenUrls.has(article.sourceUrl)) continue;
 
-      seenUrls.add(article.sourceUrl);
+      // normalize URL (strip fragments)
+      const normalizedUrl = article.sourceUrl.split('#')[0];
+      if (globalSeen.has(normalizedUrl)) continue;
+      globalSeen.add(normalizedUrl);
+
+      // Try to fetch article page to extract a real image (og:image / twitter:image / first img)
+      let imageUrl = article.imageUrl || '';
+      try {
+        const artResp = await axios.get(normalizedUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          timeout: 10000,
+        });
+
+        const $a = cheerio.load(artResp.data);
+        const og = $a('meta[property="og:image"]').attr('content') || $a('meta[name="twitter:image"]').attr('content');
+        if (og && og.startsWith('http')) {
+          imageUrl = og;
+        } else {
+          // fallback to first large image on page
+          const firstImg = $a('img').map((i, el) => $a(el).attr('src')).get().find(Boolean);
+          if (firstImg && (firstImg as string).startsWith('http')) imageUrl = firstImg as string;
+        }
+      } catch (err) {
+        // ignore per-article fetch errors and fall back to provided image or placeholder
+      }
 
       const content = generateDetailedContent(article.title, article.summary, category);
       const readTime = calculateReadTime(content);
       const tags = extractTags(article.title, category);
 
+      // stable id based on URL
+      const id = `${category.toLowerCase()}-${crypto.createHash('md5').update(normalizedUrl).digest('hex')}`;
+
       articles.push({
-        id: `${category.toLowerCase()}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id,
         title: article.title,
         summary: article.summary || article.title.substring(0, 150),
         content,
-        imageUrl: article.imageUrl || getPlaceholderImage(category),
+        imageUrl: imageUrl || getPlaceholderImage(category),
         source: source.name,
         sourceName: source.name,
-        sourceUrl: article.sourceUrl,
+        sourceUrl: normalizedUrl,
         category,
         timestamp: new Date().toISOString(),
         readTime,
@@ -569,7 +597,8 @@ export async function scrapeArticles(category?: Category, articlesPerSource: num
     const sources = NEWS_SOURCES[cat];
     
     // Scrape from all sources for this category in parallel
-    const sourcePromises = sources.map(source => scrapeSource(source, cat));
+    const globalSeen = new Set<string>(allArticles.map(a => a.sourceUrl));
+    const sourcePromises = sources.map(source => scrapeSource(source, cat, globalSeen));
     const results = await Promise.allSettled(sourcePromises);
     
     results.forEach(result => {
