@@ -1,0 +1,127 @@
+import { useQuery } from "@tanstack/react-query";
+import { useRoute, Link } from "wouter";
+import { Header } from "@/components/Header";
+import { fetchArticleById } from "@/lib/mockData";
+import { Loader2, ArrowLeft, Clock, ExternalLink, Calendar, User } from "lucide-react";
+import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNow, format } from "date-fns";
+
+export default function ArticleDetail() {
+  const [match, params] = useRoute("/article/:id");
+  const id = params?.id;
+
+  const { data: article, isLoading } = useQuery({
+    queryKey: ["article", id],
+    queryFn: () => fetchArticleById(id || ""),
+    enabled: !!id,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <div className="flex-grow flex justify-center items-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!article) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <div className="flex-grow flex flex-col justify-center items-center p-4 text-center">
+          <h2 className="text-2xl font-bold mb-4">Article Not Found</h2>
+          <p className="text-muted-foreground mb-6">The article you are looking for does not exist or has been removed.</p>
+          <Link href="/">
+            <Button>Return to Home</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      <Header />
+      
+      <main className="flex-grow">
+        {/* Hero Section */}
+        <div className="relative w-full h-[40vh] md:h-[50vh] overflow-hidden">
+          <div className="absolute inset-0 bg-black/40 z-10" />
+          <img 
+            src={article.imageUrl} 
+            alt={article.title}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute bottom-0 left-0 w-full z-20 p-4 md:p-8 bg-gradient-to-t from-black/80 to-transparent">
+            <div className="container mx-auto max-w-4xl">
+              <Badge className="mb-4 bg-primary text-primary-foreground hover:bg-primary/90 text-sm py-1 px-3">
+                {article.category}
+              </Badge>
+              <motion.h1 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-3xl md:text-5xl lg:text-6xl font-serif font-bold text-white leading-tight mb-4 shadow-sm"
+              >
+                {article.title}
+              </motion.h1>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Section */}
+        <article className="container mx-auto px-4 max-w-4xl py-8 md:py-12">
+          <div className="flex flex-col md:flex-row gap-8 mb-8 border-b pb-8">
+            <div className="flex-1 flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                <span className="font-medium text-foreground">{article.source}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>{format(new Date(article.timestamp), "MMMM d, yyyy")}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <span>{formatDistanceToNow(new Date(article.timestamp), { addSuffix: true })}</span>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/">
+                  <a className="flex items-center gap-2">
+                    <ArrowLeft className="w-4 h-4" /> Back to News
+                  </a>
+                </Link>
+              </Button>
+              <Button size="sm" asChild>
+                <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                  Visit Source <ExternalLink className="w-4 h-4" />
+                </a>
+              </Button>
+            </div>
+          </div>
+
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="prose prose-lg md:prose-xl dark:prose-invert max-w-none font-serif leading-relaxed text-foreground/90"
+            dangerouslySetInnerHTML={{ __html: article.content }}
+          />
+        </article>
+      </main>
+
+      <footer className="border-t py-8 bg-muted/30 mt-auto">
+        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+          <p>© 2025 The Daily Pulse. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
